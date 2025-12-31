@@ -75,3 +75,55 @@ class DynamicProgrammingSolver(Solver):
                 w_curr -= weights[i-1]
                 
         return float(optimal_value), solution
+
+class NeuralGreedySolver(Solver):
+    def __init__(self, model, device='cpu'):
+        self.model = model
+        self.device = device
+        self.model.eval()
+
+    def solve(self, instance: KnapsackInstance) -> Tuple[float, np.ndarray]:
+        # Prepare input
+        import torch
+        from dataset import KnapsackDataset, collate_fn
+        
+        # We need to minimally wrap the instance to use the model
+        dataset = KnapsackDataset([instance])
+        batch = collate_fn([dataset[0]])
+        
+        features = batch['features'].to(self.device)
+        mask = batch['mask'].to(self.device)
+        
+        with torch.no_grad():
+            # Get probabilities with low temperature (sharpening) NOT needed for sorting, 
+            # but standard output is fine.
+            probs = self.model(features, mask=mask, temperature=1.0)
+            probs = probs.squeeze(0).cpu().numpy() # (N,)
+            
+        # Neural Greedy: Sort by Probability Descending
+        # Only consider valid items (mask is 1)
+        n = instance.n_items
+        weights = instance.weights
+        values = instance.values
+        capacity = instance.capacity
+        
+        # Indices of items
+        indices = np.arange(n)
+        
+        # Sort indices by probability descending
+        # We use valid items only (though masking in generation handles this, let's be safe)
+        valid_indices = indices # All are potentially valid candidates
+        
+        sorted_indices = valid_indices[np.argsort(probs[valid_indices])[::-1]]
+        
+        current_weight = 0
+        current_value = 0
+        solution = np.zeros(n, dtype=int)
+        
+        for idx in sorted_indices:
+            if current_weight + weights[idx] <= capacity:
+                solution[idx] = 1
+                current_weight += weights[idx]
+                current_value += values[idx]
+                
+        return float(current_value), solution

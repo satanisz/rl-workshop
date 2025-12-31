@@ -31,11 +31,18 @@ def evaluate_models(n_test_items=20, n_samples=50):
     dp_solver = DynamicProgrammingSolver()
     greedy_solver = GreedySolver()
     
+    # NEW: Neural Greedy Solvers
+    from solvers import NeuralGreedySolver
+    sl_constructive_solver = NeuralGreedySolver(model_sl)
+    rl_constructive_solver = NeuralGreedySolver(model_rl)
+    
     results = {
         'DP': {'value': [], 'time': [], 'valid': []},
         'Greedy': {'value': [], 'time': [], 'valid': []},
-        'SL': {'value': [], 'time': [], 'valid': []},
-        'RL': {'value': [], 'time': [], 'valid': []}
+        'SL_Raw': {'value': [], 'time': [], 'valid': []},
+        'SL_Constr': {'value': [], 'time': [], 'valid': []},
+        'RL_Raw': {'value': [], 'time': [], 'valid': []},
+        'RL_Constr': {'value': [], 'time': [], 'valid': []}
     }
     
     print("Evaluating...")
@@ -44,76 +51,73 @@ def evaluate_models(n_test_items=20, n_samples=50):
         # --- DP ---
         start = time.time()
         dp_val, _ = dp_solver.solve(inst)
-        end = time.time()
         results['DP']['value'].append(dp_val)
-        results['DP']['time'].append(end - start)
-        results['DP']['valid'].append(1) # Always valid
-        
+        results['DP']['time'].append(time.time() - start)
+        results['DP']['valid'].append(1) 
+
         # --- Greedy ---
         start = time.time()
         g_val, _ = greedy_solver.solve(inst)
-        end = time.time()
         results['Greedy']['value'].append(g_val)
-        results['Greedy']['time'].append(end - start)
-        results['Greedy']['valid'].append(1) # Always valid
+        results['Greedy']['time'].append(time.time() - start)
+        results['Greedy']['valid'].append(1)
         
-        # --- Neural Inference Prep ---
-        # Prepare single batch
+        # --- SL Constructive (Neural Greedy) ---
+        start = time.time()
+        sl_c_val, _ = sl_constructive_solver.solve(inst)
+        results['SL_Constr']['value'].append(sl_c_val)
+        results['SL_Constr']['time'].append(time.time() - start)
+        results['SL_Constr']['valid'].append(1) # Always valid by design
+
+        # --- RL Constructive (Neural Greedy) ---
+        start = time.time()
+        rl_c_val, _ = rl_constructive_solver.solve(inst)
+        results['RL_Constr']['value'].append(rl_c_val)
+        results['RL_Constr']['time'].append(time.time() - start)
+        results['RL_Constr']['valid'].append(1) # Always valid by design
+        
+        # --- Raw Neural Inference (Old "In/Out" classification) ---
         dataset = KnapsackDataset([inst])
         batch = collate_fn([dataset[0]])
         features = batch['features']
         mask = batch['mask']
         
-        # --- SL Inference ---
-        start = time.time()
+        # SL Raw
         with torch.no_grad():
-            probs = model_sl(features, mask=mask, temperature=0.1) # Low temp for greedy decoding
-            # Greedy decoding: > 0.5
-            actions = (probs > 0.5).int().squeeze(0).numpy() # (N,)
-            
-        # Calc constraints
-        w_total = (actions * inst.weights).sum()
-        v_total = (actions * inst.values).sum()
-        
-        valid = 1 if w_total <= inst.capacity else 0
-        val = v_total if valid else 0 
-        
-        results['SL']['value'].append(val)
-        results['SL']['time'].append(time.time() - start)
-        results['SL']['valid'].append(valid)
-        
-        # --- RL Inference ---
-        start = time.time()
+            probs = model_sl(features, mask=mask, temperature=0.1)
+            actions = (probs > 0.5).int().squeeze(0).numpy()
+        w = (actions * inst.weights).sum()
+        v = (actions * inst.values).sum() if w <= inst.capacity else 0
+        results['SL_Raw']['value'].append(v)
+        results['SL_Raw']['time'].append(0) # Negligible/Included in constr measure mostly
+        results['SL_Raw']['valid'].append(1 if w <= inst.capacity else 0)
+
+        # RL Raw
         with torch.no_grad():
             probs = model_rl(features, mask=mask, temperature=0.1)
             actions = (probs > 0.5).int().squeeze(0).numpy()
-            
-        w_total = (actions * inst.weights).sum()
-        v_total = (actions * inst.values).sum()
-        
-        valid = 1 if w_total <= inst.capacity else 0
-        val = v_total if valid else 0 
-        
-        results['RL']['value'].append(val)
-        results['RL']['time'].append(time.time() - start)
-        results['RL']['valid'].append(valid)
+        w = (actions * inst.weights).sum()
+        v = (actions * inst.values).sum() if w <= inst.capacity else 0
+        results['RL_Raw']['value'].append(v)
+        results['RL_Raw']['time'].append(0)
+        results['RL_Raw']['valid'].append(1 if w <= inst.capacity else 0)
 
     # 4. Report
     print(f"\nResults (Average over {n_samples} samples):")
-    print(f"{'Method':<10} | {'Avg Value':<12} | {'Optimal %':<10} | {'Time (ms)':<10} | {'Valid %':<10}")
+    print(f"{'Method':<12} | {'Avg Value':<12} | {'Optimal %':<10} | {'Time (ms)':<10} | {'Valid %':<10}")
     print("-" * 65)
     
     avg_dp_val = np.mean(results['DP']['value'])
     
-    for name in ['DP', 'Greedy', 'SL', 'RL']:
+    for name in ['DP', 'Greedy', 'SL_Raw', 'SL_Constr', 'RL_Raw', 'RL_Constr']:
         avg_val = np.mean(results[name]['value'])
         avg_time = np.mean(results[name]['time']) * 1000
         valid_pct = np.mean(results[name]['valid']) * 100
+        opt_pct = (avg_val / avg_dp_val) * 100 if avg_dp_val > 0 else 0
         
-        # Optimal % is strictly Value / DP_Value
-        opt_pct = (avg_val / avg_dp_val) * 100
+        print(f"{name:<12} | {avg_val:<12.2f} | {opt_pct:<10.2f} | {avg_time:<10.4f} | {valid_pct:<10.1f}")
         
-        print(f"{name:<10} | {avg_val:<12.2f} | {opt_pct:<10.2f} | {avg_time:<10.4f} | {valid_pct:<10.1f}")
+    return results
         
     return results
 
