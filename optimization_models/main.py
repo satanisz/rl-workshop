@@ -14,12 +14,12 @@ def evaluate_models(n_test_items=20, n_samples=50):
     print("Training Supervised Model (SL)...")
     model_sl = KnapsackTransformer(nhead=4, num_layers=2)
     # Train heavily reduces for speed in demo; increase epochs for real results
-    train_sl(model_sl, n_epochs=5, batch_size=32, n_train_items=n_test_items)
+    train_sl(model_sl, n_epochs=200, batch_size=32, n_train_items=n_test_items)
     model_sl.eval()
 
     print("\nTraining Reinforcement Learning Model (RL)...")
     model_rl = KnapsackTransformer(nhead=4, num_layers=2)
-    train_rl(model_rl, n_epochs=5, batch_size=32, n_train_items=n_test_items)
+    train_rl(model_rl, n_epochs=200, batch_size=32, n_train_items=n_test_items)
     model_rl.eval()
     
     # 2. Generate Test Data
@@ -122,6 +122,6 @@ def evaluate_models(n_test_items=20, n_samples=50):
     return results
 
 if __name__ == "__main__":
-    evaluate_models(n_test_items=20, n_samples=50)
+    evaluate_models(n_test_items=20, n_samples=500)
     # Optional: Test generalization
     # evaluate_models(n_test_items=50, n_samples=50)

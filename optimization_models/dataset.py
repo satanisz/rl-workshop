@@ -10,8 +10,8 @@ class KnapsackInstance:
     values: np.ndarray   # shape (n_items,)
     capacity: int
     n_items: int
-    optimal_value: float = None
-    optimal_solution: np.ndarray = None  # binary mask
+    optimal_value: float | None = None
+    optimal_solution: np.ndarray | None = None  # binary mask
 
 class KnapsackGenerator:
     def __init__(self, 
