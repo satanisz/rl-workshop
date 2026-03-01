@@ -9,3 +9,40 @@ dependencies = [
     "torch>=2.9.1",
     "tqdm>=4.67.1",
 ]
+[tool.ruff]
+line-length = 120     
+indent-width = 4          
+fix = true               
+target-version = "py314"   
+
+[tool.ruff.lint]
+select = [
+  "E","W","F","UP","B","C4","I","SIM",
+  "D","N","FA","ICN","RET","ISC",
+  "TID","TC","PTH","TD","NPY","PT","T20","S","ANN","TCH"
+]
+ignore = ["E501","W191","E111","E114","E117","B008","C901","D100","D104"]
+
+[tool.ruff.lint.per-file-ignores]
+"__init__.py"  = ["F401"]
+"tests/**/*.py" = ["S101","D101","D102","D103"]
+"migrations/*" = ["E501"]
+
+[tool.ruff.lint.isort]
+section-order     = ["future","standard-library","third-party","first-party","local-folder"]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.ruff.lint.pyupgrade]
+keep-runtime-typing = true
+
+[tool.ruff.format]
+quote-style  = "double"
+indent-style = "space"
+line-ending  = "lf"
+
+[dependency-groups]
+dev = [
+    "ruff>=0.15.4",
+]
