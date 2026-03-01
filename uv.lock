@@ -402,7 +402,7 @@ wheels = [
 ]
 
 [[package]]
-name = "transformer-vs-heuristics"
+name = "rl-workshop"
 version = "0.1.0"
 source = { virtual = "." }
 dependencies = [
